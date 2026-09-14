@@ -1,0 +1,45 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: __ALERT_SMTP_SMARTHOST__
+  smtp_from: __ALERT_EMAIL_FROM__
+  smtp_auth_username: __ALERT_SMTP_USERNAME__
+  smtp_auth_password: __ALERT_SMTP_PASSWORD__
+  smtp_require_tls: true
+
+route:
+  receiver: mkit-travel-ops
+  group_by: [alertname, service, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: noop
+  - name: mkit-travel-ops
+    telegram_configs:
+      - bot_token: __ALERT_TELEGRAM_BOT_TOKEN__
+        chat_id: __ALERT_TELEGRAM_CHAT_ID__
+        parse_mode: HTML
+        send_resolved: true
+        message: |-
+          <b>{{ .Status | toUpper }}</b> {{ .CommonLabels.alertname }}
+          {{ range .Alerts }}
+          <b>Severity:</b> {{ .Labels.severity }}
+          <b>Service:</b> {{ .Labels.service }}
+          <b>Summary:</b> {{ .Annotations.summary }}
+          <b>Description:</b> {{ .Annotations.description }}
+          {{ end }}
+    email_configs:
+      - to: __ALERT_EMAIL_TO__
+        send_resolved: true
+        headers:
+          subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        html: |-
+          <h2>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</h2>
+          {{ range .Alerts }}
+          <p><b>Severity:</b> {{ .Labels.severity }}</p>
+          <p><b>Service:</b> {{ .Labels.service }}</p>
+          <p><b>Summary:</b> {{ .Annotations.summary }}</p>
+          <p><b>Description:</b> {{ .Annotations.description }}</p>
+          <hr />
+          {{ end }}

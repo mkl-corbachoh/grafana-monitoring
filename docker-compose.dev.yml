@@ -1,0 +1,81 @@
+services:
+  grafana:
+    image: grafana/grafana:11.5.2
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: http://localhost:3000
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - target: 3000
+        published: "3000"
+        host_ip: 127.0.0.1
+    volumes:
+      - grafana-dev-data:/var/lib/grafana
+      - ./config/grafana-dev/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana-dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring-dev
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    ports:
+      - target: 9090
+        published: "9090"
+        host_ip: 127.0.0.1
+    volumes:
+      - prometheus-dev-data:/prometheus
+      - ./config/prometheus-dev:/etc/prometheus:ro
+    networks:
+      - monitoring-dev
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    restart: unless-stopped
+    environment:
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-000000000:replace-with-real-token}
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-1}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-ops@example.com}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-MKit Travel Monitoring <alerts@example.com>}
+      ALERT_SMTP_SMARTHOST: ${ALERT_SMTP_SMARTHOST:-smtp.resend.com:587}
+      ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-resend}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-replace-with-resend-api-key}
+    command:
+      - -ec
+      - sh /etc/alertmanager/render-and-run.sh
+    entrypoint: /bin/sh
+    ports:
+      - target: 9093
+        published: "9093"
+        host_ip: 127.0.0.1
+    volumes:
+      - alertmanager-dev-data:/alertmanager
+      - ./config/alertmanager:/etc/alertmanager:ro
+    networks:
+      - monitoring-dev
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.26.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/blackbox.yml
+    volumes:
+      - ./config/blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    networks:
+      - monitoring-dev
+
+networks:
+  monitoring-dev:
+    name: mkit-monitoring-dev
+
+volumes:
+  grafana-dev-data:
+  prometheus-dev-data:
+  alertmanager-dev-data:
