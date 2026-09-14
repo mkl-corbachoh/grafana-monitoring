@@ -1,0 +1,124 @@
+services:
+  grafana:
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_SERVER_ROOT_URL: https://${GRAFANA_DOMAIN:-grafana.mikorh.com}
+    networks:
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik
+      traefik.http.routers.mkit-monitoring-grafana.rule: Host(`${GRAFANA_DOMAIN:-grafana.mikorh.com}`)
+      traefik.http.routers.mkit-monitoring-grafana.entrypoints: websecure
+      traefik.http.routers.mkit-monitoring-grafana.tls: "true"
+      traefik.http.routers.mkit-monitoring-grafana.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.services.mkit-monitoring-grafana.loadbalancer.server.port: "3000"
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - prometheus-data:/prometheus
+      - ./config/prometheus:/etc/prometheus:ro
+    networks:
+      - monitoring
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    restart: unless-stopped
+    environment:
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:?set ALERT_TELEGRAM_BOT_TOKEN in .env}
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:?set ALERT_TELEGRAM_CHAT_ID in .env}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:?set ALERT_EMAIL_TO in .env}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:?set ALERT_EMAIL_FROM in .env}
+      ALERT_SMTP_SMARTHOST: ${ALERT_SMTP_SMARTHOST:-smtp.resend.com:587}
+      ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-resend}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:?set ALERT_SMTP_PASSWORD in .env}
+    entrypoint: /bin/sh
+    command:
+      - -ec
+      - sh /etc/alertmanager/render-and-run.sh
+    volumes:
+      - alertmanager-data:/alertmanager
+      - ./config/alertmanager:/etc/alertmanager:ro
+    networks:
+      - monitoring
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.26.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/blackbox.yml
+    volumes:
+      - ./config/blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    networks:
+      - monitoring
+
+  loki:
+    image: grafana/loki:3.4.2
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/loki/loki.yml
+    volumes:
+      - loki-data:/loki
+      - ./config/loki/loki.yml:/etc/loki/loki.yml:ro
+    networks:
+      - monitoring
+
+  alloy:
+    image: grafana/alloy:v1.6.1
+    restart: unless-stopped
+    environment:
+      MONITORING_ENVIRONMENT: production
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/alloy/config.alloy:/etc/alloy/config.alloy:ro
+    networks:
+      - monitoring
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/docker/.+|var/lib/docker/.+)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - monitoring
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    name: mkit-monitoring
+  traefik:
+    external: true
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  loki-data:

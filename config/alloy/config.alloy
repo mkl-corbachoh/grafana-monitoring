@@ -33,7 +33,7 @@ discovery.relabel "docker" {
 
 	rule {
 		target_label = "environment"
-		replacement  = "production"
+		replacement  = sys.env("MONITORING_ENVIRONMENT")
 	}
 }
 

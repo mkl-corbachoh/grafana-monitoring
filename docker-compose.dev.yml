@@ -1,22 +1,9 @@
 services:
   grafana:
-    image: grafana/grafana:11.5.2
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_SERVER_ROOT_URL: http://localhost:3000
-      GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
       - target: 3000
         published: "3000"
         host_ip: 127.0.0.1
-    volumes:
-      - grafana-dev-data:/var/lib/grafana
-      - ./config/grafana-dev/provisioning:/etc/grafana/provisioning:ro
-      - ./config/grafana-dashboards:/var/lib/grafana/dashboards:ro
-    networks:
-      - monitoring-dev
 
   prometheus:
     image: prom/prometheus:v3.1.0
@@ -31,10 +18,10 @@ services:
         published: "9090"
         host_ip: 127.0.0.1
     volumes:
-      - prometheus-dev-data:/prometheus
+      - prometheus-data:/prometheus
       - ./config/prometheus-dev:/etc/prometheus:ro
     networks:
-      - monitoring-dev
+      - monitoring
 
   alertmanager:
     image: prom/alertmanager:v0.28.0
@@ -47,19 +34,19 @@ services:
       ALERT_SMTP_SMARTHOST: ${ALERT_SMTP_SMARTHOST:-smtp.resend.com:587}
       ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-resend}
       ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-replace-with-resend-api-key}
+    entrypoint: /bin/sh
     command:
       - -ec
       - sh /etc/alertmanager/render-and-run.sh
-    entrypoint: /bin/sh
     ports:
       - target: 9093
         published: "9093"
         host_ip: 127.0.0.1
     volumes:
-      - alertmanager-dev-data:/alertmanager
+      - alertmanager-data:/alertmanager
       - ./config/alertmanager:/etc/alertmanager:ro
     networks:
-      - monitoring-dev
+      - monitoring
 
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.26.0
@@ -69,13 +56,64 @@ services:
     volumes:
       - ./config/blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
     networks:
-      - monitoring-dev
+      - monitoring
+
+  loki:
+    image: grafana/loki:3.4.2
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/loki/loki.yml
+    volumes:
+      - loki-data:/loki
+      - ./config/loki/loki.yml:/etc/loki/loki.yml:ro
+    networks:
+      - monitoring
+
+  alloy:
+    image: grafana/alloy:v1.6.1
+    restart: unless-stopped
+    environment:
+      MONITORING_ENVIRONMENT: development
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/alloy/config.alloy:/etc/alloy/config.alloy:ro
+    networks:
+      - monitoring
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/docker/.+|var/lib/docker/.+)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - monitoring
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - monitoring
 
 networks:
-  monitoring-dev:
+  monitoring:
     name: mkit-monitoring-dev
 
 volumes:
-  grafana-dev-data:
-  prometheus-dev-data:
-  alertmanager-dev-data:
+  prometheus-data:
+  alertmanager-data:
+  loki-data:
