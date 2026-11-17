@@ -6,7 +6,7 @@ services:
         host_ip: 127.0.0.1
 
   prometheus:
-    image: prom/prometheus:v3.1.0
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -24,7 +24,7 @@ services:
       - monitoring
 
   alertmanager:
-    image: prom/alertmanager:v0.28.0
+    image: prom/alertmanager:v0.35.0
     restart: unless-stopped
     environment:
       ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-000000000:replace-with-real-token}
@@ -49,7 +49,7 @@ services:
       - monitoring
 
   blackbox-exporter:
-    image: prom/blackbox-exporter:v0.26.0
+    image: prom/blackbox-exporter:v0.29.1
     restart: unless-stopped
     command:
       - --config.file=/etc/blackbox_exporter/blackbox.yml
@@ -59,7 +59,7 @@ services:
       - monitoring
 
   loki:
-    image: grafana/loki:3.4.2
+    image: grafana/loki:3.7.9
     restart: unless-stopped
     command:
       - --config.file=/etc/loki/loki.yml
@@ -70,7 +70,7 @@ services:
       - monitoring
 
   alloy:
-    image: grafana/alloy:v1.6.1
+    image: grafana/alloy:v1.21.3
     restart: unless-stopped
     environment:
       MONITORING_ENVIRONMENT: development
@@ -85,7 +85,7 @@ services:
       - monitoring
 
   node-exporter:
-    image: prom/node-exporter:v1.8.2
+    image: prom/node-exporter:v1.12.1
     restart: unless-stopped
     pid: host
     command:
@@ -97,7 +97,7 @@ services:
       - monitoring
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     restart: unless-stopped
     privileged: true
     volumes:
